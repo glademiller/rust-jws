@@ -1,0 +1,12 @@
+[package]
+name = "jwt"
+version = "0.1.0"
+authors = ["Glade Miller <glade.miller@insidesales.com>"]
+
+[dependencies]
+time = "*"
+serde = "*"
+serde_json = "*"
+openssl = "0.7.13"
+rustc-serialize = "0.3"
+rand = "*"

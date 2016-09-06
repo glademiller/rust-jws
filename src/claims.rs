@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 
-extern crate serde;
-extern crate serde_json;
-
 use std::collections::BTreeMap;
-use self::serde::{Serialize, Serializer};
-use self::serde::ser::MapVisitor;
-use self::serde_json::{Value, to_value, from_value};
+use serde;
+use serde_json;
+use serde::Serialize;
+use serde_json::{Value, to_value, from_value};
+use std::result;
+use error::Result;
+
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Claims {
@@ -23,62 +24,52 @@ pub struct Claims {
 const RESERVED_CLAIMS: [&'static str; 7] = ["iss", "sub", "aud", "exp", "nbf", "iat", "jti"];
 
 impl Serialize for Claims {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
         where S: serde::Serializer
     {
-
-        struct ClaimsVisitor {
-            claims: Claims,
+        let mut state = try!(serializer.serialize_map(None));
+        for (key, value) in self.claims.iter()
+            .filter(|&(key, _)| !RESERVED_CLAIMS.contains(&key.as_str())) {
+            try!(serializer.serialize_map_key(&mut state, key));
+            try!(serializer.serialize_map_value(&mut state, value));
         }
-        impl MapVisitor for ClaimsVisitor {
-            #[inline]
-            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-                where S: Serializer
-            {
-                if let Some(ref iss) = self.claims.iss {
-                    try!(serializer.serialize_map_elt("iss", iss.as_str()));
-                }
-                if let Some(ref sub) = self.claims.sub {
-                    try!(serializer.serialize_map_elt("sub", sub.as_str()));
-                }
-                if let Some(ref aud) = self.claims.aud {
-                    try!(serializer.serialize_map_elt("aud", aud.as_str()));
-                }
-                if let Some(ref exp) = self.claims.exp {
-                    try!(serializer.serialize_map_elt("exp", exp));
-                }
-                if let Some(ref nbf) = self.claims.nbf {
-                    try!(serializer.serialize_map_elt("nbf", nbf));
-                }
-                if let Some(ref iat) = self.claims.iat {
-                    try!(serializer.serialize_map_elt("iat", iat));
-                }
-                if let Some(ref jti) = self.claims.jti {
-                    try!(serializer.serialize_map_elt("jti", jti.as_str()));
-                }
-
-                for (key, value) in self.claims
-                    .claims
-                    .iter()
-                    .filter(|&(key, _)| !RESERVED_CLAIMS.contains(&key.as_str())) {
-                    try!(serializer.serialize_map_elt(key, value));
-                }
-                return Ok(None);
-            }
-
-            #[inline]
-            fn len(&self) -> Option<usize> {
-                None
-            }
+        if let Some(ref iss) = self.iss {
+            try!(serializer.serialize_map_key(&mut state, "iss"));
+            try!(serializer.serialize_map_value(&mut state, iss.as_str()));
         }
-        return serializer.serialize_map(ClaimsVisitor { claims: self.clone() });
+        if let Some(ref sub) = self.sub {
+            try!(serializer.serialize_map_key(&mut state, "sub"));
+            try!(serializer.serialize_map_value(&mut state, sub.as_str()));
+        }
+        if let Some(ref aud) = self.aud {
+            try!(serializer.serialize_map_key(&mut state, "aud"));
+            try!(serializer.serialize_map_value(&mut state, aud.as_str()));
+        }
+        if let Some(ref exp) = self.exp {
+            try!(serializer.serialize_map_key(&mut state, "exp"));
+            try!(serializer.serialize_map_value(&mut state, exp));
+        }
+        if let Some(ref nbf) = self.nbf {
+            try!(serializer.serialize_map_key(&mut state, "nbf"));
+            try!(serializer.serialize_map_value(&mut state, nbf));
+        }
+        if let Some(ref iat) = self.iat {
+            try!(serializer.serialize_map_key(&mut state, "iat"));
+            try!(serializer.serialize_map_value(&mut state, iat));
+        }
+        if let Some(ref jti) = self.jti {
+            try!(serializer.serialize_map_key(&mut state, "jti"));
+            try!(serializer.serialize_map_value(&mut state, jti.as_str()));
+        }
+
+        serializer.serialize_map_end(state)
     }
 }
 
 enum ClaimsField { ISS, SUB, AUD, EXP, NBF, IAT, JTI, Custom(String) }
 
 impl serde::Deserialize for ClaimsField {
-    fn deserialize<D>(deserializer: &mut D) -> Result<ClaimsField, D::Error>
+    fn deserialize<D>(deserializer: &mut D) -> result::Result<ClaimsField, D::Error>
         where D: serde::de::Deserializer
     {
         struct FieldVisitor;
@@ -86,7 +77,7 @@ impl serde::Deserialize for ClaimsField {
         impl serde::de::Visitor for FieldVisitor {
             type Value = ClaimsField;
 
-            fn visit_str<E>(&mut self, value: &str) -> Result<ClaimsField, E>
+            fn visit_str<E>(&mut self, value: &str) -> result::Result<ClaimsField, E>
                 where E: serde::de::Error
             {
                 match value {
@@ -113,7 +104,7 @@ struct ClaimsVisitor;
 impl serde::de::Visitor for ClaimsVisitor {
     type Value = Claims;
 
-    fn visit_map<V>(&mut self, mut visitor: V) -> Result<Claims, V::Error>
+    fn visit_map<V>(&mut self, mut visitor: V) -> result::Result<Claims, V::Error>
         where V: serde::de::MapVisitor
     {
         let mut iss = None;
@@ -157,7 +148,7 @@ impl serde::de::Visitor for ClaimsVisitor {
 }
 
 impl serde::Deserialize for Claims {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Claims, D::Error>
+    fn deserialize<D>(deserializer: &mut D) -> result::Result<Claims, D::Error>
         where D: serde::Deserializer
     {
 
@@ -189,8 +180,8 @@ impl Claims {
        self.claims.get(key).and_then(|v| from_value(v.clone()).ok())
     }
 
-    pub fn to_json(&self) -> Result<String, serde_json::error::Error> {
-        serde_json::to_string(self)
+    pub fn to_json(&self) -> Result<String> {
+        Ok(try!(serde_json::to_string(self)))
     }
 }
 

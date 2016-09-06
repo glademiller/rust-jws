@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 extern crate openssl;
 
-use std::io::Error;
-
 use self::openssl::crypto::pkey::PKey;
 use self::openssl::crypto::hash;
 use self::openssl::crypto::hmac::hmac;
@@ -19,15 +17,15 @@ enum ALGORITHMS {
     ES512,
 }
 
-pub fn sign_pk256(key: PKey, payload: &[u8]) -> Result<Vec<u8>, Error> {
+pub fn sign_pk256(key: PKey, payload: &[u8]) -> Vec<u8> {
     sign(hash::Type::SHA256, key, payload)
 }
 
-pub fn sign_pk384(key: PKey, payload: &[u8]) -> Result<Vec<u8>, Error> {
+pub fn sign_pk384(key: PKey, payload: &[u8]) -> Vec<u8> {
     sign(hash::Type::SHA384, key, payload)
 }
 
-pub fn sign_pk512(key: PKey, payload: &[u8]) -> Result<Vec<u8>, Error> {
+pub fn sign_pk512(key: PKey, payload: &[u8]) -> Vec<u8> {
     sign(hash::Type::SHA512, key, payload)
 }
 
@@ -43,9 +41,9 @@ pub fn verify_pk512(key: PKey, hash: &[u8], payload: &[u8]) -> bool {
     verify(hash::Type::SHA256, key, hash, payload)
 }
 
-fn sign(hash_type: hash::Type, key: PKey, payload: &[u8]) -> Result<Vec<u8>, Error> {
+fn sign(hash_type: hash::Type, key: PKey, payload: &[u8]) -> Vec<u8> {
     let digest = hash::hash(hash_type, payload);
-    Ok(key.sign_with_hash(digest.as_slice(), hash_type))
+    key.sign_with_hash(digest.as_slice(), hash_type)
 }
 
 fn verify(hash_type: hash::Type, key: PKey, hash: &[u8], payload: &[u8]) -> bool {

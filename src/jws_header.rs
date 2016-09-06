@@ -4,9 +4,10 @@ extern crate serde;
 extern crate serde_json;
 
 use std::collections::BTreeMap;
-use self::serde::{Serialize, Serializer};
-use self::serde::ser::MapVisitor;
+use self::serde::Serialize;
 use self::serde_json::{Value, to_value, from_value};
+use std::result;
+use error::Result;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ALGORITHM {
@@ -22,7 +23,7 @@ pub enum ALGORITHM {
 }
 
 impl Serialize for ALGORITHM {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
         where S: serde::Serializer
     {
             let string_value = match self {
@@ -42,7 +43,7 @@ impl Serialize for ALGORITHM {
 }
 
 impl serde::Deserialize for ALGORITHM {
-    fn deserialize<D>(deserializer: &mut D) -> Result<ALGORITHM, D::Error>
+    fn deserialize<D>(deserializer: &mut D) -> result::Result<ALGORITHM, D::Error>
         where D: serde::de::Deserializer
     {
         struct AlgVisitor;
@@ -50,7 +51,7 @@ impl serde::Deserialize for ALGORITHM {
         impl serde::de::Visitor for AlgVisitor {
             type Value = ALGORITHM;
 
-            fn visit_str<E>(&mut self, value: &str) -> Result<ALGORITHM, E>
+            fn visit_str<E>(&mut self, value: &str) -> result::Result<ALGORITHM, E>
                 where E: serde::de::Error
             {
                 match value {
@@ -85,56 +86,46 @@ pub struct Header {
 const RESERVED_HEADERS: [&'static str; 6] = ["typ", "alg", "jku", "kid", "x5u", "x5t"];
 
 impl Serialize for Header {
-    fn serialize<S>(&self, serializer: &mut S) -> Result<(), S::Error>
+    fn serialize<S>(&self, serializer: &mut S) -> result::Result<(), S::Error>
         where S: serde::Serializer
     {
-
-        struct HeaderVisitor {
-            header: Header,
+        let mut state = try!(serializer.serialize_map(None));
+        try!(serializer.serialize_map_key(&mut state, "alg"));
+        try!(serializer.serialize_map_value(&mut state, self.alg.clone()));
+        if let Some(ref typ) = self.typ {
+            try!(serializer.serialize_map_key(&mut state, "typ"));
+            try!(serializer.serialize_map_value(&mut state, typ.as_str()));
         }
-        impl MapVisitor for HeaderVisitor {
-            #[inline]
-            fn visit<S>(&mut self, serializer: &mut S) -> Result<Option<()>, S::Error>
-                where S: Serializer
-            {
-                try!(serializer.serialize_map_elt("alg", self.header.alg.clone()));
-                if let Some(ref typ) = self.header.typ {
-                    try!(serializer.serialize_map_elt("typ", typ.as_str()));
-                }
-                if let Some(ref jku) = self.header.jku {
-                    try!(serializer.serialize_map_elt("jku", jku.as_str()));
-                }
-                if let Some(ref kid) = self.header.kid {
-                    try!(serializer.serialize_map_elt("kid", kid.as_str()));
-                }
-                if let Some(ref x5u) = self.header.x5u {
-                    try!(serializer.serialize_map_elt("x5u", x5u.as_str()));
-                }
-                if let Some(ref x5t) = self.header.x5t {
-                    try!(serializer.serialize_map_elt("x5t", x5t.as_str()));
-                }
-                for (key, value) in self.header
-                    .values
-                    .iter()
-                    .filter(|&(key, _)| !RESERVED_HEADERS.contains(&key.as_str())) {
-                    try!(serializer.serialize_map_elt(key, value));
-                }
-                return Ok(None);
-            }
-
-            #[inline]
-            fn len(&self) -> Option<usize> {
-                None
-            }
+        if let Some(ref jku) = self.jku {
+            try!(serializer.serialize_map_key(&mut state, "jku"));
+            try!(serializer.serialize_map_value(&mut state, jku.as_str()));
         }
-        return serializer.serialize_map(HeaderVisitor { header: self.clone() });
+        if let Some(ref kid) = self.kid {
+            try!(serializer.serialize_map_key(&mut state, "kid"));
+            try!(serializer.serialize_map_value(&mut state, kid.as_str()));
+        }
+        if let Some(ref x5u) = self.x5u {
+            try!(serializer.serialize_map_key(&mut state, "x5u"));
+            try!(serializer.serialize_map_value(&mut state, x5u.as_str()));
+        }
+        if let Some(ref x5t) = self.x5t {
+            try!(serializer.serialize_map_key(&mut state, "x5t"));
+            try!(serializer.serialize_map_value(&mut state, x5t.as_str()));
+        }
+        for (key, value) in self.values
+            .iter()
+            .filter(|&(key, _)| !RESERVED_HEADERS.contains(&key.as_str())) {
+            try!(serializer.serialize_map_key(&mut state, key));
+            try!(serializer.serialize_map_value(&mut state, value));
+        }
+        serializer.serialize_map_end(state)
     }
 }
 
 enum HeaderField { TYP, ALG, JKU, KID, X5U, X5T, Custom(String) }
 
 impl serde::Deserialize for HeaderField {
-    fn deserialize<D>(deserializer: &mut D) -> Result<HeaderField, D::Error>
+    fn deserialize<D>(deserializer: &mut D) -> result::Result<HeaderField, D::Error>
         where D: serde::de::Deserializer
     {
         struct FieldVisitor;
@@ -142,7 +133,7 @@ impl serde::Deserialize for HeaderField {
         impl serde::de::Visitor for FieldVisitor {
             type Value = HeaderField;
 
-            fn visit_str<E>(&mut self, value: &str) -> Result<HeaderField, E>
+            fn visit_str<E>(&mut self, value: &str) -> result::Result<HeaderField, E>
                 where E: serde::de::Error
             {
                 match value {
@@ -168,7 +159,7 @@ struct HeaderVisitor;
 impl serde::de::Visitor for HeaderVisitor {
     type Value = Header;
 
-    fn visit_map<V>(&mut self, mut visitor: V) -> Result<Header, V::Error>
+    fn visit_map<V>(&mut self, mut visitor: V) -> result::Result<Header, V::Error>
         where V: serde::de::MapVisitor
     {
         let mut typ = None;
@@ -216,7 +207,7 @@ impl serde::de::Visitor for HeaderVisitor {
 }
 
 impl serde::Deserialize for Header {
-    fn deserialize<D>(deserializer: &mut D) -> Result<Header, D::Error>
+    fn deserialize<D>(deserializer: &mut D) -> result::Result<Header, D::Error>
         where D: serde::Deserializer
     {
 
@@ -247,8 +238,8 @@ impl Header {
        self.values.get(key).and_then(|v| from_value(v.clone()).ok())
     }
 
-    pub fn to_json(&self) -> Result<String, serde_json::error::Error> {
-        serde_json::to_string(self)
+    pub fn to_json(&self) -> Result<String> {
+        Ok(try!(serde_json::to_string(self)))
     }
 }
 

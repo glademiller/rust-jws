@@ -1,12 +1,13 @@
 [package]
-name = "jwt"
+name = "jws"
 version = "0.1.0"
 authors = ["Glade Miller <glade.miller@insidesales.com>"]
 
 [dependencies]
 time = "*"
-serde = "*"
-serde_json = "*"
+serde = "0.8"
+serde_json = "0.8"
 openssl = "0.7.13"
 rustc-serialize = "0.3"
 rand = "*"
+quick-error = "*"
